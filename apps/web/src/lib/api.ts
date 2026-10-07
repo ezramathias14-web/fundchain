@@ -12,7 +12,13 @@ export class ApiError extends Error {
   }
 }
 
-export const api = axios.create({ baseURL: '/api/v1' });
+/**
+ * Base URL API. Default `/api/v1` (di-proxy Vercel ke fundchain-api production).
+ * Staging: set VITE_API_BASE_URL=https://<api-staging>.vercel.app/api/v1 di project web staging.
+ */
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+
+export const api = axios.create({ baseURL: API_BASE_URL });
 
 api.interceptors.request.use((config) => {
   const token = useSession.getState().token;
@@ -50,7 +56,7 @@ export async function openProtectedFile(url: string) {
   const tab = window.open('', '_blank');
   try {
     const token = useSession.getState().token;
-    const res = await fetch(`/api/v1${url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const res = await fetch(`${API_BASE_URL}${url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new ApiError(body?.error?.code ?? 'NOT_FOUND', body?.error?.message ?? 'File tidak dapat dibuka.', res.status);
@@ -72,7 +78,9 @@ export async function openProtectedFile(url: string) {
 export async function openSignedFile(linkPath: string) {
   const tab = window.open('', '_blank');
   try {
-    const { url } = await get<{ url: string }>(linkPath);
+    const { url: path } = await get<{ url: string }>(linkPath);
+    // Staging (API beda origin): link relatif dari server harus diarahkan ke origin API.
+    const url = /^https?:\/\//.test(API_BASE_URL) ? new URL(path, API_BASE_URL).href : path;
     if (tab) tab.location.href = url;
     else window.location.href = url;
   } catch (e) {

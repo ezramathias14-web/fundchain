@@ -131,6 +131,14 @@ Salin `apps/api/.env.example` → `apps/api/.env` (file ini tidak di-commit). Va
 2. Di `apps/api/.env`: `BLOCKCHAIN_NETWORK=sepolia`, `CHAIN_ID=11155111`, `BLOCKCHAIN_RPC_URL=<rpc sepolia>`, `RELAYER_PRIVATE_KEY=<kunci relayer>`, `BLOCKCHAIN_CONFIRMATIONS=2`.
 3. Isi relayer dengan Sepolia ETH dari faucet. Link Etherscan otomatis muncul di UI.
 
+## Infra & security
+
+CI/CD, staging, secret, backup, RLS, rate limit, dan audit log: lihat [`docs/INFRA_SECURITY.md`](docs/INFRA_SECURITY.md).
+
+```
+pnpm --filter @fundchain/api security:check   # cek RLS & audit log di database (butuh DIRECT_URL)
+```
+
 ## Test
 
 ```bash

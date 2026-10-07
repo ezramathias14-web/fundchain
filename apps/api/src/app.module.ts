@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AdminAuditInterceptor } from './common/admin-audit.interceptor';
 import { ActingUserGuard } from './common/auth';
 import { env } from './common/env';
+import { GLOBAL_RATE_LIMIT } from './common/rate-limits';
 import { AllExceptionsFilter, ResponseInterceptor } from './common/http';
 import { PrismaModule } from './common/prisma.service';
 import { AuditService } from './modules/audit/audit.service';
@@ -27,7 +29,7 @@ import { UsersController } from './modules/users/users.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
+    ThrottlerModule.forRoot(GLOBAL_RATE_LIMIT),
     PrismaModule,
   ],
   controllers: [
@@ -55,6 +57,7 @@ import { UsersController } from './modules/users/users.controller';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: ActingUserGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AdminAuditInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import type { Role } from '@fundchain/shared';
 import type { Request } from 'express';
 import { AppError } from './app-error';
+import { AuditService } from '../modules/audit/audit.service';
 import { PrismaService } from './prisma.service';
 import { verifySessionToken } from './session-token';
 
@@ -28,11 +29,11 @@ export interface CurrentUserPayload {
 export type AuthedRequest = Request & { user?: CurrentUserPayload };
 
 const IS_PUBLIC = 'isPublic';
-const ROLES = 'roles';
+export const ROLES_KEY = 'roles';
 
 /** Endpoint boleh diakses tanpa identitas (user tetap di-attach kalau header ada). */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
-export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
   return ctx.switchToHttp().getRequest<AuthedRequest>().user;
@@ -47,6 +48,7 @@ export class ActingUserGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -55,11 +57,24 @@ export class ActingUserGuard implements CanActivate {
 
     const targets = [ctx.getHandler(), ctx.getClass()];
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets);
-    const roles = this.reflector.getAllAndOverride<Role[]>(ROLES, targets);
+    const roles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, targets);
 
     if (isPublic && !roles) return true;
     if (!req.user) throw new AppError('AUTH_UNAUTHENTICATED', 'Silakan login dengan Google terlebih dahulu.');
     if (roles?.length && !roles.includes(req.user.role)) {
+      // User yang sudah login mencoba endpoint admin → catat (indikasi privilege escalation).
+      if (roles.includes('ADMIN')) {
+        await this.audit
+          .log({
+            actorId: req.user.id,
+            action: 'ADMIN_ACCESS_DENIED',
+            entityType: 'AdminAction',
+            entityId: null,
+            metadata: { method: req.method, route: req.originalUrl?.split('?')[0] ?? req.url, role: req.user.role },
+            ipAddress: req.ip ?? null,
+          })
+          .catch(() => undefined);
+      }
       throw new AppError('AUTH_FORBIDDEN', 'Anda tidak memiliki akses ke fitur ini.');
     }
     return true;

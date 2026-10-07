@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { AppError } from '../../common/app-error';
-import { CurrentUser, type CurrentUserPayload, Public, Roles } from '../../common/auth';
+import { ClientIp, CurrentUser, type CurrentUserPayload, Public, Roles } from '../../common/auth';
 import { env } from '../../common/env';
 import { PrismaService } from '../../common/prisma.service';
+import { RATE_LIMIT } from '../../common/rate-limits';
 import { createSessionToken } from '../../common/session-token';
 import { AuditService } from '../audit/audit.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
@@ -50,8 +52,9 @@ export class UsersController {
    * audience & email, membuat/menemukan user, lalu menerbitkan token sesi.
    */
   @Public()
+  @Throttle(RATE_LIMIT.AUTH)
   @Post('auth/google')
-  async loginGoogle(@Body() dto: GoogleLoginDto) {
+  async loginGoogle(@Body() dto: GoogleLoginDto, @ClientIp() ip: string | null) {
     const cfg = env();
     if (!cfg.googleClientId) throw new AppError('AUTH_UNAUTHENTICATED', 'Login Google belum dikonfigurasi di server.');
 
@@ -83,6 +86,27 @@ export class UsersController {
             integritySubjectId: `${isAdmin ? 'ADM' : 'STU'}-${randomBytes(5).toString('hex').toUpperCase()}`,
           },
         });
+
+    // Jejak keamanan: setiap login, dan kenaikan peran menjadi ADMIN, tercatat di audit log.
+    const promoted = !!existing && existing.role !== user.role;
+    if (!existing || promoted) {
+      await this.audit.log({
+        actorId: user.id,
+        action: promoted ? 'USER_ROLE_CHANGED' : 'USER_REGISTERED',
+        entityType: 'User',
+        entityId: user.id,
+        metadata: promoted ? { from: existing!.role, to: user.role, reason: 'ADMIN_EMAILS' } : { role: user.role },
+        ipAddress: ip,
+      });
+    }
+    await this.audit.log({
+      actorId: user.id,
+      action: 'USER_LOGIN',
+      entityType: 'User',
+      entityId: user.id,
+      metadata: { role: user.role, method: 'google' },
+      ipAddress: ip,
+    });
 
     return {
       token: createSessionToken(user.id),

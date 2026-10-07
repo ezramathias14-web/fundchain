@@ -12,10 +12,12 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Type } from 'class-transformer';
 import { IsInt, IsString, MaxLength, Min } from 'class-validator';
 import type { Response } from 'express';
 import { ClientIp, CurrentUser, type CurrentUserPayload, Public, Roles } from '../../common/auth';
+import { RATE_LIMIT } from '../../common/rate-limits';
 import { ReasonDto } from '../campaigns/campaigns.dto';
 import { uploadInterceptor } from '../campaigns/campaigns.controller';
 import { DisbursementsService } from './disbursements.service';
@@ -36,6 +38,7 @@ export class DisbursementsController {
   constructor(private readonly disbursements: DisbursementsService) {}
 
   /** multipart/form-data: amount, description, proof (PDF/PNG/JPG). */
+  @Throttle(RATE_LIMIT.UPLOAD)
   @Post('campaigns/:id/disbursements')
   @UseInterceptors(uploadInterceptor('proof'))
   create(

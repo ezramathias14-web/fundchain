@@ -13,10 +13,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { LIMITS } from '@fundchain/shared';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { ClientIp, CurrentUser, type CurrentUserPayload, Public, Roles } from '../../common/auth';
+import { RATE_LIMIT } from '../../common/rate-limits';
 import { createSignedQuery, verifySignedQuery } from '../../common/signed-link';
 import { AuditService } from '../audit/audit.service';
 import { CreateCampaignDto, ListCampaignsQuery, ReasonDto, UpdateCampaignDto } from './campaigns.dto';
@@ -51,11 +53,13 @@ export class CampaignsController {
     return this.audit.campaignActivity(id);
   }
 
+  @Throttle(RATE_LIMIT.WRITE)
   @Post('campaigns')
   create(@Body() dto: CreateCampaignDto, @CurrentUser() user: CurrentUserPayload, @ClientIp() ip: string | null) {
     return this.campaigns.create(dto, user, ip);
   }
 
+  @Throttle(RATE_LIMIT.WRITE)
   @Patch('campaigns/:id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -66,6 +70,7 @@ export class CampaignsController {
     return this.campaigns.update(id, dto, user, ip);
   }
 
+  @Throttle(RATE_LIMIT.UPLOAD)
   @Post('campaigns/:id/documents')
   @UseInterceptors(uploadInterceptor('file'))
   upload(
@@ -77,6 +82,7 @@ export class CampaignsController {
     return this.campaigns.uploadDocument(id, file, user, ip);
   }
 
+  @Throttle(RATE_LIMIT.WRITE)
   @Post('campaigns/:id/submit')
   submit(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserPayload, @ClientIp() ip: string | null) {
     return this.campaigns.submit(id, user, ip);

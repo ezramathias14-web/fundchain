@@ -125,14 +125,22 @@ export class IntegrityService {
     const skipped = await this.prisma.donation.count({
       where: { campaignId, status: 'PAID', NOT: { blockchain: { status: 'CONFIRMED' } } },
     });
-    return {
+    const summary = {
       checked: results.length,
       verified: results.filter((r) => r.status === 'VERIFIED').length,
       tampered: results.filter((r) => r.status === 'TAMPERED').length,
       skippedNotNotarized: skipped,
       frozenCampaigns: [...new Set(results.filter((r) => r.campaignFrozen).map((r) => r.campaignId))],
-      results,
-      errors,
     };
+    // Satu entri ringkasan per aksi admin "Verifikasi semua / per campaign" (selain entri per donasi).
+    await this.audit.log({
+      actorId,
+      action: 'INTEGRITY_BULK_VERIFY',
+      entityType: campaignId ? 'Campaign' : 'System',
+      entityId: campaignId ?? null,
+      metadata: { scope: campaignId ? 'campaign' : 'all', ...summary, errors: errors.length },
+      ipAddress: ip,
+    });
+    return { ...summary, results, errors };
   }
 }

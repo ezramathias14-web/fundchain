@@ -6,11 +6,10 @@ import { ClientIp, CurrentUser, type CurrentUserPayload, Public, Roles } from '.
 import { PrismaService } from '../../common/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { env } from '../../common/env';
+import { RATE_LIMIT } from '../../common/rate-limits';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { NotarizationWorker } from '../blockchain/notarization.worker';
 import { IntegrityService } from './integrity.service';
-
-const VERIFY_LIMIT = { default: { limit: 10, ttl: 60_000 } };
 
 @Controller()
 export class IntegrityController {
@@ -48,7 +47,7 @@ export class IntegrityController {
   }
 
   @Roles('ADMIN')
-  @Throttle(VERIFY_LIMIT)
+  @Throttle(RATE_LIMIT.VERIFY)
   @Post('admin/donations/:id/verify')
   @HttpCode(200)
   verifyDonation(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() admin: CurrentUserPayload, @ClientIp() ip: string | null) {
@@ -56,7 +55,7 @@ export class IntegrityController {
   }
 
   @Roles('ADMIN')
-  @Throttle(VERIFY_LIMIT)
+  @Throttle(RATE_LIMIT.VERIFY)
   @Post('admin/campaigns/:id/verify')
   @HttpCode(200)
   verifyCampaign(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() admin: CurrentUserPayload, @ClientIp() ip: string | null) {
@@ -64,7 +63,7 @@ export class IntegrityController {
   }
 
   @Roles('ADMIN')
-  @Throttle(VERIFY_LIMIT)
+  @Throttle(RATE_LIMIT.VERIFY)
   @Post('admin/integrity/verify-all')
   @HttpCode(200)
   verifyAll(@CurrentUser() admin: CurrentUserPayload, @ClientIp() ip: string | null) {
@@ -73,6 +72,7 @@ export class IntegrityController {
 
   /** Antrekan ulang notarisasi yang FAILED. Hash yang dikirim tetap hash saat settlement. */
   @Roles('ADMIN')
+  @Throttle(RATE_LIMIT.VERIFY)
   @Post('admin/blockchain/:donationId/retry')
   @HttpCode(200)
   async retry(

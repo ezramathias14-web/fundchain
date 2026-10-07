@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsOptional } from 'class-validator';
 import { AppError } from '../../common/app-error';
 import { type AuthedRequest, ClientIp, CurrentUser, type CurrentUserPayload, Public, Roles } from '../../common/auth';
 import { env } from '../../common/env';
+import { RATE_LIMIT } from '../../common/rate-limits';
 import { MOCK_SIGNATURE_HEADER, signMockBody } from '../payments/adapters/mock.adapter';
 import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../common/prisma.service';
@@ -39,6 +40,7 @@ export class DonationsController {
     if (status && status !== 'CONFIRMED' && status !== 'FAILED') this.worker.kick();
   }
 
+  @Throttle(RATE_LIMIT.DONATE)
   @Post('campaigns/:id/donations')
   create(
     @Param('id', ParseUUIDPipe) campaignId: string,
@@ -84,7 +86,7 @@ export class DonationsController {
 
   /** Webhook payment gateway. Keaslian diverifikasi oleh adapter (signature / konfirmasi API). */
   @Public()
-  @SkipThrottle()
+  @Throttle(RATE_LIMIT.WEBHOOK)
   @Post('webhooks/payment')
   @HttpCode(200)
   async webhook(@Req() req: AuthedRequest & { rawBody?: Buffer }, @ClientIp() ip: string | null) {
@@ -97,6 +99,7 @@ export class DonationsController {
    * DEV ONLY — simulasi gateway mengirim webhook bertanda tangan untuk donasi ini.
    * Melewati jalur yang persis sama dengan webhook asli.
    */
+  @Throttle(RATE_LIMIT.DEV)
   @Post('dev/payments/:donationId/simulate')
   @HttpCode(200)
   async simulate(

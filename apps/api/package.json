@@ -6,7 +6,8 @@
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
-    "test": "vitest run",
+    "test": "vitest run && pnpm test:e2e",
+    "test:e2e": "node -r ts-node/register/transpile-only --test test/security.e2e.ts",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force",
@@ -15,7 +16,8 @@
     "demo:tamper": "ts-node --transpile-only scripts/demo-tamper.ts",
     "db:deploy": "prisma migrate deploy",
     "db:setup": "prisma migrate deploy && prisma db seed",
-    "files:sync": "ts-node --transpile-only scripts/sync-files-to-db.ts"
+    "files:sync": "ts-node --transpile-only scripts/sync-files-to-db.ts",
+    "security:check": "ts-node --transpile-only scripts/security-check.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"
